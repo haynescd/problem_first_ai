@@ -4,4 +4,21 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "arize-otel==0.11.0",
+    "dotenv>=0.9.9",
+    "gradio==6.3.0",
+    "langchain==1.2.3",
+    "langchain-google-genai==4.1.2",
+    "langchain-openai==1.1.7",
+    "langgraph==1.0.5",
+    "openinference-instrumentation-langchain==0.1.58",
+    "opentelemetry-sdk==1.39.1",
+    "python-dotenv==1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel==7.1.0",
+    "jupyter==1.1.1",
+]
