@@ -14,6 +14,7 @@ dependencies = [
     "langgraph==1.0.5",
     "openinference-instrumentation-langchain==0.1.58",
     "opentelemetry-sdk==1.39.1",
+    "pydantic>=2.13.3",
     "python-dotenv==1.2.1",
 ]
 
