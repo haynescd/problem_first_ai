@@ -45,7 +45,7 @@ class BasicToolsChat(ChatInterface):
         - Set up response formatting prompts
         - Initialize calculator tool
         """
-        self.llm = init_chat_model("gemini-2.0-flash-lite", model_provider="google_genai")
+        self.llm = init_chat_model("gemini-2.5-flash-lite", model_provider="google_genai")
 
         workflow = StateGraph(PromptAgentState)
         workflow.add_node("classify_intent", classify_intent)
@@ -87,9 +87,10 @@ class BasicToolsChat(ChatInterface):
         Returns:
             str: The assistant's response
         """
+        history = "\n".join(f"{m['role']}: {m['content']}" for m in (chat_history or []))
 
         runtime_config = {"configurable": {"model": self.llm}}
-        input = PromptAgentState(user_input=message)
+        input = PromptAgentState(user_input=message, history=history)
 
         final_state = self.app.invoke(input, config=runtime_config)
         return final_state.get("response")

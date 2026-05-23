@@ -29,6 +29,7 @@ class PromptAgentState(BaseModel):
     classification: Classification | None = None
     prompt: str | None = None
     response: str | None = None
+    history: str
 
 
 CLASSIFICATION_PROMPTS = {
@@ -72,15 +73,21 @@ def handle_query_prompts(state: PromptAgentState, config: RunnableConfig):
         Classification.DEFINITION: "You are answering definition type questions. Your answers (Define..., Explain...)",
     }
 
+    history_prompt = """Use information from the conversation history only if relevant to the above user query, otherwise ignore the history.
+        Conversation history with the user:
+        {history}"""
+
     p = prompt_map[state.classification]
-    prompt = ChatPromptTemplate.from_messages([("system", f"{p}"), ("human", "{user_input}")])
+    prompt = ChatPromptTemplate.from_messages(
+        [("system", f"{p}\n{history_prompt}"), ("human", "{user_input}")]
+    )
 
     llm = config.get("configurable", {}).get("model")
     if not llm:
         raise ValueError("LLM must be provided via graph configuration.")
 
     chain = prompt | llm | StrOutputParser()
-    output = chain.invoke({"user_input": state.user_input})
+    output = chain.invoke({"user_input": state.user_input, "history": state.history})
 
     state.response = output
     return state.model_dump()
@@ -91,7 +98,10 @@ def calculation(state: PromptAgentState, config: RunnableConfig):
     if not llm:
         raise ValueError("LLM must be provided via graph configuration.")
 
-    system_prompt = "Extract ONLY the mathematical expression."
+    system_prompt = """
+    Extract ONLY the mathematical expression.
+    the extracted mathematical expression must only contain allowed characters (digits, spaces, +, -, *, /, (, ), and .).
+    """
     prompt = ChatPromptTemplate.from_messages(
         [("system", f"{system_prompt}"), ("human", "{user_input}")]
     )
