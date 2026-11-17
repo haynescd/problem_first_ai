@@ -4,6 +4,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import tool
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from langgraph.graph.state import RunnableConfig
 from pydantic import BaseModel, Field
 
@@ -39,6 +40,18 @@ CLASSIFICATION_PROMPTS = {
     Classification.DEFINITION: "If the user starts the question with 'Define or Explain'",
     Classification.CALCULATION: "If the user is asking to solve a math problem, calculate a number, compute percentages, tips, or perform any arithmetic operation (e.g., 'Compute 17% tip', 'What is 45 * 12').",
 }
+
+
+HISTORY_PROMPT = """Use information from the conversation history only if relevant to the above user query, otherwise ignore the history.
+        Conversation history with the user:
+        {history}"""
+
+
+def get_openai_llm() -> ChatOpenAI:
+    return ChatOpenAI(
+        base_url="http://127.0.0.1:8087",
+        model="ggml-org/gpt-oss-120b-GGUF",
+    )
 
 
 def build_system_prompt() -> str:
@@ -103,10 +116,10 @@ def calculation(state: PromptAgentState, config: RunnableConfig):
     the extracted mathematical expression must only contain allowed characters (digits, spaces, +, -, *, /, (, ), and .).
     """
     prompt = ChatPromptTemplate.from_messages(
-        [("system", f"{system_prompt}"), ("human", "{user_input}")]
+        [("system", f"{system_prompt}\n{HISTORY_PROMPT}"), ("human", "{user_input}")]
     )
     chain = prompt | llm | StrOutputParser()
-    output = chain.invoke({"user_input": state.user_input})
+    output = chain.invoke({"user_input": state.user_input, "history": state.history})
 
     state.response = str(calculator_tool(output))
     return state.model_dump()

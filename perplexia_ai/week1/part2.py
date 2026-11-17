@@ -6,14 +6,11 @@ This implementation focuses on:
 - Format calculation results clearly
 """
 
-import os
-from typing import Dict, List, Optional
-
-from arize.otel import register
-from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from openinference.instrumentation.langchain import LangChainInstrumentor
+from phoenix.otel import register
 
 from perplexia_ai.core.chat_interface import ChatInterface
 from perplexia_ai.tools.calculator import Calculator
@@ -21,16 +18,19 @@ from perplexia_ai.week1.common import (
     PromptAgentState,
     calculation,
     classify_intent,
+    get_openai_llm,
     handle_query_prompts,
     route_after_classification,
 )
+
+tracer_provider = register(project_name="default", auto_instrument=True)
 
 
 class BasicToolsChat(ChatInterface):
     """Week 1 Part 2 implementation adding calculator functionality."""
 
     def __init__(self):
-        self.llm = None
+        self.llm: ChatOpenAI | None = None
         self.query_classifier_prompt = None
         self.response_prompts = {}
         self.app: CompiledStateGraph | None = None
@@ -45,8 +45,11 @@ class BasicToolsChat(ChatInterface):
         - Set up response formatting prompts
         - Initialize calculator tool
         """
-        self.llm = init_chat_model("gemini-2.5-flash-lite", model_provider="google_genai")
+        self.llm = get_openai_llm()
 
+        self._build_graph()
+
+    def _build_graph(self) -> None:
         workflow = StateGraph(PromptAgentState)
         workflow.add_node("classify_intent", classify_intent)
         workflow.add_node("calculation", calculation)
@@ -63,15 +66,8 @@ class BasicToolsChat(ChatInterface):
 
         self.app = workflow.compile()
 
-        tracer_provider = register(
-            space_id=os.environ["ARIZE_SPACE_ID"],
-            api_key=os.environ["ARIZE_API_KEY"],
-            project_name="v0_part2",  # name this to whatever you would like
-        )
-        LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
-
     def process_message(
-        self, message: str, chat_history: Optional[List[Dict[str, str]]] = None
+        self, message: str, chat_history: list[dict[str, str]] | None = None
     ) -> str:
         """Process a message with calculator support.
 
