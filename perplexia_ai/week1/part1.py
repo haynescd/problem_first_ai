@@ -6,48 +6,28 @@ This implementation focuses on:
 - Present information professionally
 """
 
-from enum import StrEnum
-from gettext import Catalog
-from typing import Dict, List, Optional
-from unicodedata import category
-
-from langchain.chat_models import init_chat_model
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from phoenix.otel import register
 
 from perplexia_ai.core.chat_interface import ChatInterface
+from perplexia_ai.week1.common import (
+    PromptAgentState,
+    classify_intent,
+    get_openai_llm,
+    handle_query_prompts,
+)
 
-
-class Classification(StrEnum):
-    FACTUAL = "factual"
-    COMPARISON = "comparison"
-    CALCULATION = "calculation"
-    ANALYTICAL = "analytical"
-    DEFINITION = "definition"
-
-
-CLASSIFICATION_PROMPTS = {
-    Classification.FACTUAL: "If the user starts the question with 'What is or Who invented'",
-    Classification.COMPARISON: "If the user starts the question with 'What is the difference between'",
-    Classification.ANALYTICAL: "If the user starts the question with 'How does or Why do'",
-    Classification.DEFINITION: "If the user starts the question with 'Define or Explain'",
-}
-
-
-def build_system_prompt() -> str:
-    prompt = "You are an intent classifier.Return ONLY the category name. Classify the user query into one these categories:"
-    for category, p in CLASSIFICATION_PROMPTS.items():
-        prompt += f"\n - {category}: {p}"
-    return prompt
+tracer_provider = register(project_name="default", auto_instrument=True)
 
 
 class QueryUnderstandingChat(ChatInterface):
     """Week 1 Part 1 implementation focusing on query understanding."""
 
     def __init__(self):
-        self.llm = None
-        self.query_classifier_prompt = None
-        self.response_prompts = {}
+        self.llm: ChatOpenAI | None = None
+        self.app: CompiledStateGraph | None = None
 
     def initialize(self) -> None:
         """Initialize components for query understanding.
@@ -58,13 +38,22 @@ class QueryUnderstandingChat(ChatInterface):
         - Set up response formatting prompts
         """
 
-        self.query_classifier_prompt = ChatPromptTemplate.from_messages(
-            [("system", f"{build_system_prompt()}"), ("human", "{user_input}")]
-        )
-        self.llm = init_chat_model("gemini-2.5-flash-lite", model_provider="google_genai")
+        self.llm = get_openai_llm()
+        self._build_graph()
+
+    def _build_graph(self) -> None:
+        workflow = StateGraph(PromptAgentState)
+        workflow.add_node("classify_intent", classify_intent)
+        workflow.add_node("handle_query_prompts", handle_query_prompts)
+
+        workflow.add_edge(START, "classify_intent")
+        workflow.add_edge("classify_intent", "handle_query_prompts")
+        workflow.add_edge("handle_query_prompts", END)
+        self.app = workflow.compile()
+        print(self.app.get_graph().draw_ascii())
 
     def process_message(
-        self, message: str, chat_history: Optional[List[Dict[str, str]]] = None
+        self, message: str, chat_history: list[dict[str, str]] | None = None
     ) -> str:
         """Process a message using query understanding.
 
@@ -80,7 +69,8 @@ class QueryUnderstandingChat(ChatInterface):
         Returns:
             str: The assistant's response
         """
-        classifier_chain = self.query_classifier_prompt | self.llm | StrOutputParser()
-        category = classifier_chain.invoke({"user_input": message})
+        runtime_config = {"configurable": {"model": self.llm}}
+        input = PromptAgentState(user_input=message, history="")
 
-        return category
+        final_state = self.app.invoke(input, config=runtime_config)
+        return final_state.get("response")
