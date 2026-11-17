@@ -24,14 +24,14 @@ tracer_provider = register(project_name="default", auto_instrument=True)
 
 class QueryUnderstandingChat(ChatInterface):
     """Week 1 Part 1 implementation focusing on query understanding."""
-
+    
     def __init__(self):
         self.llm: ChatOpenAI | None = None
         self.app: CompiledStateGraph | None = None
 
     def initialize(self) -> None:
         """Initialize components for query understanding.
-
+        
         Students should:
         - Initialize the chat model
         - Set up query classification prompts
@@ -56,16 +56,16 @@ class QueryUnderstandingChat(ChatInterface):
         self, message: str, chat_history: list[dict[str, str]] | None = None
     ) -> str:
         """Process a message using query understanding.
-
+        
         Students should:
         - Classify the query type
         - Generate appropriate response
         - Format based on query type
-
+        
         Args:
             message: The user's input message
             chat_history: Not used in Part 1
-
+            
         Returns:
             str: The assistant's response
         """
